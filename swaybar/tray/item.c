@@ -124,6 +124,12 @@ static int get_property_callback(sd_bus_message *msg, void *data,
 				(!strcmp(err->name, SD_BUS_ERROR_UNKNOWN_PROPERTY))) {
 			log_lv = SWAY_DEBUG;
 		}
+
+		if ((!strcmp(prop, "IconPixmap")) &&
+				(!strcmp(err->name, SD_BUS_ERROR_UNKNOWN_PROPERTY))) {
+			log_lv = SWAY_DEBUG;
+		}
+
 		sway_log(log_lv, "%s %s: %s", sni->watcher_id, prop, err->message);
 		ret = sd_bus_message_get_errno(msg);
 		goto cleanup;
