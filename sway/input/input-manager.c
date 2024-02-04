@@ -9,6 +9,8 @@
 #include <wlr/types/wlr_input_inhibitor.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
 #include <wlr/types/wlr_virtual_pointer_v1.h>
+#include <libinput.h>
+#include <libudev.h>
 #include "sway/config.h"
 #include "sway/input/cursor.h"
 #include "sway/input/input-manager.h"
@@ -66,21 +68,73 @@ struct sway_seat *input_manager_sway_seat_from_wlr_seat(struct wlr_seat *wlr_sea
 	return NULL;
 }
 
+static const char *get_usb_name(struct wlr_input_device *device) {
+	if (!wlr_input_device_is_libinput(device)) {
+		return NULL;
+	}
+
+	struct libinput_device *libinput_device = wlr_libinput_get_device_handle(device);
+
+	struct udev_device *udev_device = libinput_device_get_udev_device(libinput_device);
+	if (udev_device == NULL) {
+		return NULL;
+	}
+
+	const char *usb_name = NULL;
+
+	if (!udev_device_has_tag(udev_device, "external-device")) {
+		struct udev_device *parent = udev_device;
+		const char *sysname = NULL;
+
+		do {
+			const char *subsystem = udev_device_get_subsystem(parent);
+			if (subsystem != NULL && strncmp(subsystem, "usb", 3) == 0) {
+				sysname = udev_device_get_sysattr_value(parent, "interface");
+				if (sysname == NULL) {
+					sysname = udev_device_get_sysname(parent);
+				}
+			}
+
+			parent = udev_device_get_parent(parent);
+		} while (sysname == NULL && parent != NULL);
+
+		// We need to copy the string here, since its lifetime is bound to the udev device.
+		if (sysname != NULL) {
+			const size_t sysname_len = strlen(sysname);
+
+			usb_name = malloc(sysname_len + 1);
+			if (usb_name != NULL) {
+				memcpy(usb_name, sysname, sysname_len + 1);
+				sanitize_string(usb_name);
+			}
+		}
+	}
+
+	udev_device_unref(udev_device);
+
+	return usb_name;
+}
+
 char *input_device_get_identifier(struct wlr_input_device *device) {
+	const char *usb_name = get_usb_name(device);
+
 	int vendor = device->vendor;
 	int product = device->product;
 	char *name = strdup(device->name ? device->name : "");
 	strip_whitespace(name);
 
-	char *p = name;
-	for (; *p; ++p) {
-		// There are in fact input devices with unprintable characters in its name
-		if (*p == ' ' || !isprint(*p)) {
-			*p = '_';
-		}
+	// There are in fact input devices with unprintable characters in its name
+	sanitize_string(name);
+
+	char *identifier;
+
+	if (usb_name != NULL) {
+		identifier = format_str("%d:%d:usb_%s", vendor, product, usb_name);
+		free(usb_name);
+	} else {
+		identifier = format_str("%d:%d:%s", vendor, product, name);
 	}
 
-	char *identifier = format_str("%d:%d:%s", vendor, product, name);
 	free(name);
 	return identifier;
 }
