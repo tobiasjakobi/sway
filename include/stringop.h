@@ -13,6 +13,7 @@
 
 void strip_whitespace(char *str);
 void strip_quotes(char *str);
+void sanitize_string(char *str);
 
 // strcat that does nothing if dest or src is NULL
 char *lenient_strcat(char *dest, const char *src);

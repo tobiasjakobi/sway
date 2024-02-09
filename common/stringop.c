@@ -50,6 +50,16 @@ void strip_quotes(char *str) {
 	*end = '\0';
 }
 
+void sanitize_string(char *str) {
+	char *p = str;
+	for (; *p; ++p) {
+		// There are in fact input devices with unprintable characters in its name
+		if (*p == ' ' || !isprint(*p)) {
+			*p = '_';
+		}
+	}
+}
+
 char *lenient_strcat(char *dest, const char *src) {
 	if (dest && src) {
 		return strcat(dest, src);
